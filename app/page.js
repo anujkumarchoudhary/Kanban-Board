@@ -1,103 +1,130 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import Heading from "./components/Heading";
+import TaskFrom from "./components/TaskFrom";
+import { useDispatch } from "react-redux";
+import { getAllTask, updateTask } from "./redux/slice/tasksSlice";
+import { toast } from "react-toastify";
+
+export default function TodoBoard() {
+  const dispatch = useDispatch();
+  const [refresh, setRefresh] = useState(false);
+  const [columns, setColumns] = useState([]);
+  const [open, setOpen] = useState(false);
+  const updateTaskAPI = async (taskId, newStatus) => {
+    const body = {
+      status: newStatus,
+    };
+    try {
+      const res = await dispatch(updateTask({ id: taskId, body }));
+      if (res?.payload?.status === 200) {
+        toast.success(res?.payload?.message);
+        refresh();
+      } else {
+        toast.error(res?.payload?.message);
+      }
+    } catch (error) {
+      console.error("API update failed:", error);
+    }
+  };
+
+  const onDragEnd = (result) => {
+    const { source, destination } = result;
+
+    if (!destination) return;
+
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) {
+      return;
+    }
+
+    // moving tasks
+    const sourceCol = Array.from(columns[source.droppableId]);
+    const [movedTask] = sourceCol.splice(source.index, 1);
+
+    const destCol = Array.from(columns[destination.droppableId]);
+    destCol.splice(destination.index, 0, movedTask);
+
+    const newColumns = {
+      ...columns,
+      [source.droppableId]: sourceCol,
+      [destination.droppableId]: destCol,
+    };
+
+    setColumns(newColumns);
+
+    // 🚀 Call API with new status
+    updateTaskAPI(movedTask.id, destination.droppableId);
+  };
+
+  const getAllTasks = async () => {
+    try {
+      const res = await dispatch(getAllTask());
+      if (res?.payload?.data) {
+        setColumns(res?.payload?.data);
+      }
+    } catch (err) {
+      console.log("error", "err");
+    }
+  };
+
+  useEffect(() => {
+    getAllTasks();
+  }, [refresh]);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="p-10">
+      <Heading handleClick={() => setOpen(!open)} />
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="block md:flex gap-4 my-4">
+          {Object.entries(columns).map(([colId, tasks]) => (
+            <Droppable key={colId} droppableId={colId}>
+              {(provided, snapshot) => (
+                <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  className={`flex-1 p-4 rounded-lg min-h-[300px] my-4 ${
+                    snapshot.isDraggingOver ? "bg-blue-100" : "bg-gray-100"
+                  }`}
+                >
+                  <h2 className="font-bold mb-2 capitalize">{colId}</h2>
+                  {tasks.map((task, index) => (
+                    <Draggable
+                      key={task.id}
+                      draggableId={task.id}
+                      index={index}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className={`p-2 mb-2 rounded shadow cursor-pointer ${
+                            snapshot.isDragging ? "bg-blue-300" : "bg-white"
+                          }`}
+                        >
+                          {task.content}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          ))}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </DragDropContext>
+      {open && (
+        <TaskFrom
+          refresh={() => setRefresh(!refresh)}
+          handleClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }
